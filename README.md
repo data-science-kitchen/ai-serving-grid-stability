@@ -7,6 +7,15 @@ Kaggle competition: https://www.kaggle.com/competitions/ai-serving-grid-stabilit
 
 ## Getting started
 
+### Install Notebook
+
+1. `py -m venv venv` (Python 3.9.1) or replace `py` with your installed Python version.
+2. Activate your venv
+3. `pip install requirements.txt`
+4. Add Kernel: `python -m ipykernel install --user --name ai-serving-grid-stab --display-name "Ai Serving Grid Stability"`
+5. Select your kernel in your Notebook.
+
+
 ### Get the data
 1. Install Kaggle API ([see instructions](https://www.kaggle.com/docs/api))
 2. Run ```kaggle competitions download -c ai-serving-grid-stability```
