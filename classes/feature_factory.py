@@ -140,6 +140,16 @@ class FeatureFactory:
         for data in [self.train_data, self.test_data]:
             data['FRCE_LFCInput_Diff'] = data['FRCE'] - data['LFCInput']
 
+    def add_corrected_demand_feature(self):
+        """
+        Feature that checks if the calculated demand
+        """
+        for data in [self.train_data, self.test_data]:
+            corrected_demand_calculated = data["Demand"] + data["correction"]
+            corrected_demand_difference = np.abs(data["correctedDemand"] - corrected_demand_calculated)
+
+            data['corrected_demand_diff'] = corrected_demand_difference
+
     def add_FRCE_LFCInput_mavg_difference(self):
         """
         """
