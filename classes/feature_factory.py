@@ -150,18 +150,32 @@ class FeatureFactory:
 
             data['corrected_demand_diff'] = corrected_demand_difference
 
-    def add_FRCE_LFCInput_mavg_difference(self):
+    # TODO: DO NOT USE
+    # def add_FRCE_LFCInput_mavg_difference(self):
+    #     """
+    #     """
+    #     for data in [self.train_data, self.test_data]:
+    #         data.sort_index(inplace=True)
+    #         results = []
+    #         for control_area in [1, 2]:
+    #             area_subset = data[data["controlArea"] == control_area]
+    #             aFRRrequest_mavg = area_subset['aFRRrequest'].rolling(window=20).mean()
+    #             aFRRactivation_mavg = area_subset['aFRRactivation'].rolling(window=15).mean()
+    #             results.append(np.abs(aFRRrequest_mavg - aFRRactivation_mavg))
+    #         data['FRCE_LFCInput_mavg_difference'] = pd.concat(results).sort_index()
+
+    def add_aFRRactivation_mavg_diff(self):
         """
+        Usually the derivative has a high peak when the asynchronous pattern appears
         """
         for data in [self.train_data, self.test_data]:
             data.sort_index(inplace=True)
             results = []
             for control_area in [1, 2]:
                 area_subset = data[data["controlArea"] == control_area]
-                aFRRrequest_mavg = area_subset['aFRRrequest'].rolling(window=20).mean()
-                aFRRactivation_mavg = area_subset['aFRRactivation'].rolling(window=15).mean()
-                results.append(np.abs(aFRRrequest_mavg - aFRRactivation_mavg))
-            data['FRCE_LFCInput_mavg_difference'] = pd.concat(results).sort_index()
+                aFRRactivation_mavg = area_subset['aFRRactivation'].rolling(window=5).mean()
+                results.append(aFRRactivation_mavg.diff(2))
+            data['aFRRactivation_mavg_diff'] = pd.concat(results).sort_index()
 
     def add_correctionEcho_freeze(self):
         """
