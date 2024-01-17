@@ -1,7 +1,9 @@
 import pandas as pd
 import numpy as np
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, PolynomialFeatures
 from sklearn.impute import SimpleImputer
+import sksfa
+
 
 # Ideas so far:
 # a) activation, request Signal:    derivative, to detect opposite direction (asynchronous)
@@ -203,3 +205,33 @@ class FeatureFactory:
         """ 
         for data in [self.train_data, self.test_data]:
             data['Demand_FRCE_Interaction'] = data['Demand'] * data['FRCE']
+
+    def add_SFA(self, n_components, sfa_features, poly_degree=2, control_area=0, batch_size=100):
+        """
+        Add a new feature representing the interaction between Demand and FRCE.
+        """ 
+
+        numeric_train_ca = self.train_data[self.train_data.controlArea == control_area].drop("Datum_Uhrzeit_CET", axis=1)[sfa_features].to_numpy() 
+
+
+        numeric_train = self.train_data.drop("Datum_Uhrzeit_CET", axis=1)[sfa_features].to_numpy()
+        numeric_test = self.test_data.drop("Datum_Uhrzeit_CET", axis=1)[sfa_features].to_numpy()
+        
+        # Poly expansion
+        pf = PolynomialFeatures(degree=poly_degree)
+        numeric_train = pf.fit_transform(numeric_train)
+        numeric_train_ca = pf.transform(numeric_train_ca)
+        numeric_test = pf.transform(numeric_test)
+
+
+            
+        sfa = sksfa.SFA(n_components, batch_size=100)
+        sfa = sfa.fit(numeric_train_ca)
+
+
+        train_slow_features = sfa.transform(numeric_train)
+        test_slow_features = sfa.transform(numeric_test)
+        # 
+        for component_index in range(n_components):
+            self.train_data[f"sfa{component_index}_{control_area}"] = train_slow_features[:, component_index]
+            self.test_data[f"sfa{component_index}_{control_area}"] = test_slow_features[:, component_index]

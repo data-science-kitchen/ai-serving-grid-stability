@@ -11,9 +11,18 @@ from classes.feature_factory import FeatureFactory
 train_df = pd.read_csv('data/train.csv')
 test_df = pd.read_csv('data/test.csv')
 
+print("A")
 # Beispiel für die Verwendung FeatureFactory
 factory = FeatureFactory(train_df, test_df)
 
+n_sfa_components = 4
+sfa_control_areas = [1, 2]
+sfa_degree = 1
+
+selected_sfa_features = ["Demand", "correction", "correctionEcho", "FRCE", "LFCInput", 'aFRRactivation', 'aFRRrequest',]
+
+for sfa_control_area in sfa_control_areas:
+       factory.add_SFA(n_sfa_components, selected_sfa_features, poly_degree=sfa_degree, control_area=sfa_control_area)
 factory.add_time_features()
 factory.add_rolling_features(window_size=3)
 factory.add_ratio_and_diff_features()
@@ -32,7 +41,13 @@ features = ['Demand', 'correction', 'correctedDemand',
        'day', 'weekday', 'month', 'Demand_RollingMean', 'Demand_RollingStd',
        'Demand_CorrectedDemand_Ratio', 'Demand_CorrectedDemand_Diff',
        'aFRR_Activation_Request_Ratio', 'FRCE_LFCInput_Diff',
-       'Participation_State', 'Demand_FRCE_Interaction', 'corrected_demand_diff']
+       'Participation_State', 'Demand_FRCE_Interaction']#, 'corrected_demand_diff']
+
+
+for sfa_control_area in sfa_control_areas:
+       sfa_features = [f"sfa{c}_{sfa_control_area}" for c in range(n_sfa_components)]
+       features = features + sfa_features
+
 X_train = factory.train_data[features]
 X_test = factory.test_data[features]
 
