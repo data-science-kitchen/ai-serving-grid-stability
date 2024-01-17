@@ -17,7 +17,7 @@ factory = FeatureFactory(train_df, test_df)
 
 n_sfa_components = 4
 sfa_control_areas = [1, 2]
-sfa_degree = 1
+sfa_degree = 2
 
 selected_sfa_features = ["Demand", "correction", "correctionEcho", "FRCE", "LFCInput", 'aFRRactivation', 'aFRRrequest',]
 
