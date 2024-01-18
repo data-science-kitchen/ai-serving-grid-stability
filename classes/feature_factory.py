@@ -233,7 +233,7 @@ class FeatureFactory:
             processing_pipeline.append(sfa)
 
         for processing_step in processing_pipeline:
-            numeric_train = processing_step.fit_transform(numeric_train)
+            numeric_train = processing_step.transform(numeric_train)
             numeric_test = processing_step.transform(numeric_test)
 
         for component_index in range(n_components):
