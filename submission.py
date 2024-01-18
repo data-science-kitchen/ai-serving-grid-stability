@@ -63,7 +63,7 @@ for sfa_control_area in sfa_control_areas:
         selected_sfa_features,
         poly_degree=sfa_degree,
         control_area=sfa_control_area,
-        batch_size=200,
+        batch_size=100,
         cascade_length=1,
     )
 
