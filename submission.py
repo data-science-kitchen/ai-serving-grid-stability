@@ -131,7 +131,8 @@ print(test_df[["Datum_Uhrzeit_CET", "Demand", "correctedDemand", "anomaly"]].hea
 # Konvertiere Anomalie-Vorhersagen: -1 (Anomalie) wird zu 1 und 1 (normal) wird zu 0
 test_df["anomaly"] = test_df["anomaly"].apply(lambda x: 1 if x == -1 else 0)
 
-submission_df = fill_anomalies(test_df.copy(), window_size=4, threshold=4, loops=2)
+df_filled = fill_anomalies(test_df.copy(), window_size=4, threshold=4, loops=2)
+submission_df = remove_anomalies(df_filled.copy(), window_size=5, threshold=4)
 
 submission_df = submission_df[["id", "anomaly"]]
 submission_df.to_csv("submission.csv", index=False)
