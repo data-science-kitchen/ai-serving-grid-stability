@@ -206,32 +206,36 @@ class FeatureFactory:
         for data in [self.train_data, self.test_data]:
             data['Demand_FRCE_Interaction'] = data['Demand'] * data['FRCE']
 
-    def add_SFA(self, n_components, sfa_features, poly_degree=2, control_area=0, batch_size=100):
+    def add_SFA(self, n_components, sfa_features, poly_degree=2, control_area=0, batch_size=100, cascade_length=1):
         """
         Add a new feature representing the interaction between Demand and FRCE.
         """ 
 
         numeric_train_ca = self.train_data[self.train_data.controlArea == control_area].drop("Datum_Uhrzeit_CET", axis=1)[sfa_features].to_numpy() 
 
-
         numeric_train = self.train_data.drop("Datum_Uhrzeit_CET", axis=1)[sfa_features].to_numpy()
         numeric_test = self.test_data.drop("Datum_Uhrzeit_CET", axis=1)[sfa_features].to_numpy()
         
-        # Poly expansion
+        
         pf = PolynomialFeatures(degree=poly_degree)
-        numeric_train = pf.fit_transform(numeric_train)
-        numeric_train_ca = pf.transform(numeric_train_ca)
-        numeric_test = pf.transform(numeric_test)
+        numeric_train_ca = pf.fit_transform(numeric_train_ca)
+        sfa = sksfa.SFA(n_components, batch_size=batch_size)
+        numeric_train_ca = sfa.fit_transform(numeric_train_ca)
+        processing_pipeline = [pf, sfa]
 
+        for cascade_idx in range(cascade_length - 1):            
+            print(f"\tSFA Cascade level {cascade_idx + 2}, degree {poly_degree}")
+            pf = PolynomialFeatures(degree=poly_degree)
+            numeric_train_ca = pf.fit_transform(numeric_train_ca)
+            processing_pipeline.append(pf)
+            sfa = sksfa.SFA(n_components, batch_size=batch_size)
+            numeric_train_ca = sfa.fit_transform(numeric_train_ca)
+            processing_pipeline.append(sfa)
 
-            
-        sfa = sksfa.SFA(n_components, batch_size=100)
-        sfa = sfa.fit(numeric_train_ca)
+        for processing_step in processing_pipeline:
+            numeric_train = processing_step.fit_transform(numeric_train)
+            numeric_test = processing_step.transform(numeric_test)
 
-
-        train_slow_features = sfa.transform(numeric_train)
-        test_slow_features = sfa.transform(numeric_test)
-        # 
         for component_index in range(n_components):
-            self.train_data[f"sfa{component_index}_{control_area}"] = train_slow_features[:, component_index]
-            self.test_data[f"sfa{component_index}_{control_area}"] = test_slow_features[:, component_index]
+            self.train_data[f"sfa{component_index}_{control_area}"] = numeric_train[:, component_index]
+            self.test_data[f"sfa{component_index}_{control_area}"] = numeric_test[:, component_index]
