@@ -6,6 +6,8 @@ from sklearn.preprocessing import StandardScaler
 from classes.feature_factory import FeatureFactory
 
 mlflow.set_tracking_uri("https://mlflow.preislers.de")
+mlflow.set_experiment("ai-serving-grid-stability")
+
 
 
 def fill_anomalies(df, window_size=4, threshold=2, loops=2):
