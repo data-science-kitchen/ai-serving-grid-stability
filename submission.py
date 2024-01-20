@@ -83,6 +83,7 @@ with mlflow.start_run():
 
     factory.add_time_features()
     factory.add_rolling_features(window_size=3)
+    # factory.add_rolling_features_by_control_area(window_size=3)
     factory.add_ratio_and_diff_features()
     factory.add_aFRR_activation_request_ratio()
     factory.add_FRCE_LFCInput_difference()
@@ -110,8 +111,8 @@ with mlflow.start_run():
         "day",
         "weekday",
         "month",
-        "Demand_RollingMean",
-        "Demand_RollingStd",
+        # "Demand_RollingMean",
+        # "Demand_RollingStd",
         "Demand_CorrectedDemand_Ratio",
         "Demand_CorrectedDemand_Diff",
         "aFRR_Activation_Request_Ratio",
@@ -143,6 +144,7 @@ with mlflow.start_run():
     for key, value in model.get_params().items():
         mlflow.log_param(key, value)
     model.fit(X_train_normalized)
+    mlflow.sklearn.log_model(model, "IF")
 
     # Anomalien auf Testdaten vorhersagen und anzeigen
     test_df["anomaly"] = model.predict(X_test_normalized)
@@ -152,13 +154,13 @@ with mlflow.start_run():
         lambda x: 1 if x == -1 else 0)
 
     df_filled = fill_anomalies(
-        test_df.copy(), window_size=4, threshold=4, loops=2)
-    mlflow.log_param('fill_window_size', 4)
+        test_df.copy(), window_size=10, threshold=4, loops=2)
+    mlflow.log_param('fill_window_size', 10)
     mlflow.log_param('fill_threshold', 4)
     mlflow.log_param('fill_loops', 2)
     submission_df = remove_anomalies(
         df_filled.copy(), window_size=5, threshold=4)
-    mlflow.log_param('remove_window_size', 4)
+    mlflow.log_param('remove_window_size', 5)
     mlflow.log_param('remove_threshold', 4)
 
     submission_df = submission_df[["id", "anomaly"]]
