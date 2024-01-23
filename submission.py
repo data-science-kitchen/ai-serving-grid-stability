@@ -111,6 +111,8 @@ with mlflow.start_run():
         "day",
         "weekday",
         "month",
+        # "daylight",
+        # "workday",
         # "Demand_RollingMean",
         # "Demand_RollingStd",
         "Demand_CorrectedDemand_Ratio",
@@ -140,7 +142,7 @@ with mlflow.start_run():
 
     # Isolation Forest Modell initialisieren und trainieren
     model = IsolationForest(
-        n_estimators=100, contamination="auto", random_state=42)
+        n_estimators=32, contamination="auto", random_state=42)
     for key, value in model.get_params().items():
         mlflow.log_param(key, value)
     model.fit(X_train_normalized)
