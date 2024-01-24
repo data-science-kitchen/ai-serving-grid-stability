@@ -62,7 +62,7 @@ def main(
             labels_data_frame["anomaly"].values, submission_data_frame["anomaly"].values, beta=1.75
         )
 
-        score_abs_difference = np.abs(kaggle_score - label_score)
+        score_abs_difference = label_score - kaggle_score
 
         results.append(
             {
@@ -75,12 +75,17 @@ def main(
 
     results = pd.DataFrame.from_dict(results)
 
-    fig, ax = plt.subplots(figsize=(16, 9))
-    sns.scatterplot(data=results, x="kaggle_score", y="score_abs_difference", ax=ax)
+    sns.set_style("whitegrid")
+
+    fig, ax = plt.subplots(figsize=(12, 12))
+    sns.regplot(data=results, x="kaggle_score", y="label_score", ax=ax)
+    ax.plot([0, 1], [0, 1], transform=ax.transAxes, linestyle="dashed")
+    ax.set_xlim([0, 1])
+    ax.set_ylim([0, 1])
+    ax.set_xlabel("F-beta score (beta=1.75) per Kaggle submission")
+    ax.set_ylabel("F-beta score (beta=1.75) per submission on labelled test-set")
+    ax.set_aspect(1)
     plt.show()
-
-
-    pass
 
 
 if __name__ == "__main__":
