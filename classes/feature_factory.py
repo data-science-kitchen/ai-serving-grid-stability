@@ -55,7 +55,7 @@ class FeatureFactory:
         (Hopefully)
     """
 
-    def __init__(self, train_data: pd.DataFrame, test_data: pd.DataFrame):
+    def __init__(self, train_data: pd.DataFrame = None, test_data: pd.DataFrame = None):
         """
         Initialize the FeatureFactory with training and testing data.
 
@@ -69,14 +69,18 @@ class FeatureFactory:
 
     def _preprocess(self):
         """Convert 'Datum_Uhrzeit_CET' column to datetime in both datasets."""
-        self.train_data["Datum_Uhrzeit_CET"] = pd.to_datetime(self.train_data["Datum_Uhrzeit_CET"])
-        self.test_data["Datum_Uhrzeit_CET"] = pd.to_datetime(self.test_data["Datum_Uhrzeit_CET"])
+        if self.train_data is not None:
+            self.train_data["Datum_Uhrzeit_CET"] = pd.to_datetime(self.train_data["Datum_Uhrzeit_CET"])
+        if self.test_data is not None:
+            self.test_data["Datum_Uhrzeit_CET"] = pd.to_datetime(self.test_data["Datum_Uhrzeit_CET"])
 
     def add_time_features(self):
         """
         Add time-based features (hour, day, weekday, month) to both datasets.
         """
         for data in [self.train_data, self.test_data]:
+            if data is None:
+                continue
             data["hour"] = data["Datum_Uhrzeit_CET"].dt.hour
             data["day"] = data["Datum_Uhrzeit_CET"].dt.day
             data["weekday"] = data["Datum_Uhrzeit_CET"].dt.weekday
@@ -90,6 +94,8 @@ class FeatureFactory:
             window_size (int): The window size for calculating rolling statistics.
         """
         for data in [self.train_data, self.test_data]:
+            if data is None:
+                continue
             # MEAN
             data["Demand_RollingMean"] = data["Demand"].rolling(window=window_size).mean()
             # Refill
@@ -113,6 +119,8 @@ class FeatureFactory:
             window_size (int): The window size for calculating rolling statistics.
         """
         for data in [self.train_data, self.test_data]:
+            if data is None:
+                continue
             # Bereite Spalten für die rollierenden Features vor
             data["Demand_RollingMean"] = pd.NA
             data["Demand_RollingStd"] = pd.NA
@@ -139,6 +147,8 @@ class FeatureFactory:
         Add ratio and difference features between 'Demand' and 'correctedDemand'.
         """
         for data in [self.train_data, self.test_data]:
+            if data is None:
+                continue
             # MEAN
             data["Demand_CorrectedDemand_Ratio"] = data["Demand"] / data["correctedDemand"]
             # Refill
@@ -155,6 +165,8 @@ class FeatureFactory:
         Add a new feature representing the ratio of aFRR activation to aFRR request.
         """
         for data in [self.train_data, self.test_data]:
+            if data is None:
+                continue
             with np.errstate(divide="ignore", invalid="ignore"):
                 data["aFRR_Activation_Request_Ratio"] = data["aFRRactivation"] / data["aFRRrequest"]
                 # Replace infinity with NaN
@@ -170,6 +182,8 @@ class FeatureFactory:
         Add a new feature representing the difference between FRCE and LFCInput.
         """
         for data in [self.train_data, self.test_data]:
+            if data is None:
+                continue
             data["FRCE_LFCInput_Diff"] = data["FRCE"] - data["LFCInput"]
 
     def add_corrected_demand_feature(self):
@@ -177,6 +191,8 @@ class FeatureFactory:
         Feature that checks if the calculated demand
         """
         for data in [self.train_data, self.test_data]:
+            if data is None:
+                continue
             corrected_demand_calculated = data["Demand"] + data["correction"]
             corrected_demand_difference = np.abs(data["correctedDemand"] - corrected_demand_calculated)
 
@@ -201,6 +217,8 @@ class FeatureFactory:
         Usually the derivative has a high peak when the asynchronous pattern appears
         """
         for data in [self.train_data, self.test_data]:
+            if data is None:
+                continue
             data.sort_index(inplace=True)
             results = []
             for control_area in [1, 2]:
@@ -214,6 +232,8 @@ class FeatureFactory:
         Detect if the correctionEcho signal freezes for a certain time
         """
         for data in [self.train_data, self.test_data]:
+            if data is None:
+                continue
             data.sort_index(inplace=True)
             results = []
             for control_area in [1, 2]:
@@ -227,6 +247,8 @@ class FeatureFactory:
         participationCMO and participationIN.
         """
         for data in [self.train_data, self.test_data]:
+            if data is None:
+                continue
             data["Participation_State"] = data["participationCMO"].astype(int) * 2 + data["participationIN"].astype(int)
 
     def add_demand_FRCE_interaction(self):
@@ -234,41 +256,53 @@ class FeatureFactory:
         Add a new feature representing the interaction between Demand and FRCE.
         """
         for data in [self.train_data, self.test_data]:
+            if data is None:
+                continue
             data["Demand_FRCE_Interaction"] = data["Demand"] * data["FRCE"]
 
-    def add_SFA(self, n_components, sfa_features, poly_degree=2, control_area=0, batch_size=100, cascade_length=1):
+    def add_SFA(self, n_components, sfa_features, poly_degree=2, control_area=0, batch_size=100, cascade_length=1, trained_pipeline=None):
         """
         Add a new feature representing the interaction between Demand and FRCE.
         """
+        if self.train_data is not None:
+            numeric_train_ca = (
+                self.train_data[self.train_data.controlArea == control_area]
+                .drop("Datum_Uhrzeit_CET", axis=1)[sfa_features]
+                .to_numpy()
+            )
+            numeric_train = self.train_data.drop("Datum_Uhrzeit_CET", axis=1)[sfa_features].to_numpy()
+        if self.test_data is not None:
+            numeric_test = self.test_data.drop("Datum_Uhrzeit_CET", axis=1)[sfa_features].to_numpy()
 
-        numeric_train_ca = (
-            self.train_data[self.train_data.controlArea == control_area]
-            .drop("Datum_Uhrzeit_CET", axis=1)[sfa_features]
-            .to_numpy()
-        )
-
-        numeric_train = self.train_data.drop("Datum_Uhrzeit_CET", axis=1)[sfa_features].to_numpy()
-        numeric_test = self.test_data.drop("Datum_Uhrzeit_CET", axis=1)[sfa_features].to_numpy()
-
-        pf = PolynomialFeatures(degree=poly_degree)
-        numeric_train_ca = pf.fit_transform(numeric_train_ca)
-        sfa = sksfa.SFA(n_components, batch_size=batch_size)
-        numeric_train_ca = sfa.fit_transform(numeric_train_ca)
-        processing_pipeline = [pf, sfa]
-
-        for cascade_idx in range(cascade_length - 1):
-            print(f"\tSFA Cascade level {cascade_idx + 2}, degree {poly_degree}")
+        if trained_pipeline is not None:
+            processing_pipeline = trained_pipeline
+        else:   
             pf = PolynomialFeatures(degree=poly_degree)
-            numeric_train_ca = pf.fit_transform(numeric_train_ca)
-            processing_pipeline.append(pf)
             sfa = sksfa.SFA(n_components, batch_size=batch_size)
+
+            numeric_train_ca = pf.fit_transform(numeric_train_ca)
             numeric_train_ca = sfa.fit_transform(numeric_train_ca)
-            processing_pipeline.append(sfa)
+            processing_pipeline = [pf, sfa]
+
+            for cascade_idx in range(cascade_length - 1):
+                print(f"\tSFA Cascade level {cascade_idx + 2}, degree {poly_degree}")
+                pf = PolynomialFeatures(degree=poly_degree)
+                numeric_train_ca = pf.fit_transform(numeric_train_ca)
+                processing_pipeline.append(pf)
+                sfa = sksfa.SFA(n_components, batch_size=batch_size)
+                numeric_train_ca = sfa.fit_transform(numeric_train_ca)
+                processing_pipeline.append(sfa)
 
         for processing_step in processing_pipeline:
-            numeric_train = processing_step.transform(numeric_train)
-            numeric_test = processing_step.transform(numeric_test)
+            if self.train_data is not None:
+                numeric_train = processing_step.transform(numeric_train)
+            if self.test_data is not None:
+                numeric_test = processing_step.transform(numeric_test)
 
         for component_index in range(n_components):
-            self.train_data[f"sfa{component_index}_{control_area}"] = numeric_train[:, component_index]
-            self.test_data[f"sfa{component_index}_{control_area}"] = numeric_test[:, component_index]
+            if self.train_data is not None:
+                self.train_data[f"sfa{component_index}_{control_area}"] = numeric_train[:, component_index]
+            if self.test_data is not None:
+                self.test_data[f"sfa{component_index}_{control_area}"] = numeric_test[:, component_index]
+
+        return processing_pipeline
