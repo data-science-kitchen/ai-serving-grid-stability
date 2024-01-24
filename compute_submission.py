@@ -1,67 +1,62 @@
 import fire
-import numpy as np
 import os
 import pandas as pd
 
 from os import PathLike
+from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import IsolationForest
-from typing import Optional, Tuple, Union
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OrdinalEncoder, RobustScaler
+from sksfa import SFA
+from typing import Union
 
 
-# def compute_windowed_correlation(
-#     signal: pd.Series,
-#     other: Optional[pd.Series] = None,
-#     window_length: int = 15,
-#     segment_id: Optional[pd.Series] = None,
-# ) -> pd.Series:
-#     r"""Computes windowed correlations, either between two signals or as an auto-correlation of a single signal.
-#
-#     Parameters
-#     ----------
-#     signal
-#     window_length
-#
-#     Returns
-#     -------
-#
-#     """
-#
-#     def correlation(
-#         signal_: pd.Series, other_: Optional[pd.Series] = None, window_length_: int = 15
-#     ) -> Tuple[pd.Series, pd.Series]:
-#         r"""Correlation helper function with identical inputs as the main function."""
-#         overlap = window_length_ - 1
-#         num_windows = int(np.ceil((len(signal) - overlap) / (window_length - overlap)))
-#
-#         correlation_lag = []
-#         correlation_max = []
-#
-#         for idx in range(num_windows - 1):
-#             signal_window = signal_[idx : np.minimum(idx + window_length_, len(signal))]
-#
-#             if other_ is not None:
-#                 other_window = other_[idx : np.minimum(idx + window_length_, len(signal))]
-#                 c = np.correlate(signal_window, other_window, mode="same")
-#                 n = np.dot(signal_window.abs(), other_window.abs())
-#             else:
-#                 c = np.correlate(signal_window, signal_window, mode="same")
-#                 n = np.dot(signal_window.abs(), signal_window.abs())
-#
-#             correlation_lag.append(np.argmax(c))
-#             correlation_max.append(np.max(c / n))
-#
-#         return pd.Series(correlation_lag), pd.Series(correlation_max)
-#
-#     if segment_id is not None:
-#         for i in segment_id.unique():
-#             signal_segment = signal[segment_id == i]
-#
-#             if other is not None:
-#                 other_segment = other[segment_id == i]
-#
-#             correlation_segment = correlation(signal_segment, other_segment, window_length)
-#
-#     raise NotImplementedError
+NUMERIC_FEATURES = [
+    # "Demand",
+    # "correction",
+    # "correctedDemand",
+    # "FRCE",
+    # "LFCInput",
+    # "aFRRactivation",
+    # "aFRRrequest",
+    # "BandLimitedCorrectedDemand",
+    "hour",
+    "dayofweek",
+    "month",
+    "correction_squared_diff",
+    "afrr_squared_diff",
+    "demand_squared_diff",
+    "frce_lfc_squared_diff",
+]
+ORDINAL_FEATURES = ["agg_categorical_features"]
+SFA_FEATURES = [
+    "Demand",
+    "correction",
+    "correctedDemand",
+    "controlBandPos",
+    "controlBandNeg",
+    "FRCE",
+    "LFCInput",
+    "aFRRactivation",
+    "aFRRrequest",
+    "BandLimitedCorrectedDemand",
+]
+
+
+def compute_squared_difference(signal: pd.Series, other: pd.Series, name: str) -> pd.Series:
+    r"""Computes the point-wise squared difference between two signals.
+
+    Parameters
+    ----------
+    signal
+    other
+    name
+
+    Returns
+    -------
+
+    """
+    return pd.Series((signal - other).pow(2), name=name)
 
 
 def compute_datetime_features(datetime_signal: pd.Series) -> pd.DataFrame:
@@ -82,7 +77,7 @@ def compute_datetime_features(datetime_signal: pd.Series) -> pd.DataFrame:
     result["dayofweek"] = datetime_signal.dt.dayofweek
     result["month"] = datetime_signal.dt.month
     result["daylight"] = ((result["hour"] >= 6) & (result["hour"] <= 18)).astype(int)
-    result["workday"] = (result['dayofweek'] < 5).astype(int)
+    result["workday"] = (result["dayofweek"] < 5).astype(int)
 
     return result
 
@@ -97,7 +92,32 @@ def main(data_dir: Union[str, PathLike] = "data"):
         train_df_area = train_df[train_df["controlArea"] == control_area]
         test_df_area = test_df[test_df["controlArea"] == control_area]
 
-        model = IsolationForest(n_estimators=100, contamination="auto", random_state=42)
+        sfa_pipeline = Pipeline(
+            [
+                ("scaler", RobustScaler()),
+                ("sfa", SFA(n_components=8, batch_size=1024, random_state=42)),
+            ]
+        )
+
+        feature_transformer = ColumnTransformer(
+            [
+                ("numeric_columns", RobustScaler(), NUMERIC_FEATURES),
+                ("sfa_features", sfa_pipeline, SFA_FEATURES),
+                (
+                    "ordinal_columns",
+                    OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1),
+                    ORDINAL_FEATURES,
+                ),
+            ],
+            remainder="drop",
+        )
+
+        model = Pipeline(
+            [
+                ("feature_transformer", feature_transformer),
+                ("estimator", IsolationForest(n_estimators=32, contamination="auto", random_state=42)),
+            ]
+        )
 
         predictions = pd.DataFrame()
 
@@ -105,10 +125,38 @@ def main(data_dir: Union[str, PathLike] = "data"):
             data = data.sort_values("Datum_Uhrzeit_CET")
 
             datetime_features = compute_datetime_features(data["Datum_Uhrzeit_CET"])
-            data = pd.concat([data, datetime_features], axis=1)
+            correction_squared_diff = compute_squared_difference(
+                data["correction"], data["correctionEcho"], "correction_squared_diff"
+            )
+            afrr_squared_diff = compute_squared_difference(
+                data["aFRRactivation"], data["aFRRrequest"], "afrr_squared_diff"
+            )
+            demand_squared_diff = compute_squared_difference(
+                data["correctedDemand"], data["Demand"] + data["correction"], "demand_squared_diff"
+            )
+            frce_lfc_squared_diff = compute_squared_difference(data["FRCE"], data["LFCInput"], "frce_lfc_squared_diff")
+
+            data = pd.concat(
+                [
+                    data,
+                    datetime_features,
+                    correction_squared_diff,
+                    afrr_squared_diff,
+                    demand_squared_diff,
+                    frce_lfc_squared_diff,
+                ],
+                axis=1,
+            )
+
+            data["agg_categorical_features"] = (
+                data["participationCMO"].astype(int).astype(str)
+                + data["participationIN"].astype(int).astype(str)
+                + data["daylight"].astype(str)
+                + data["workday"].astype(str)
+            )
 
             if split == "train":
-                data = data.drop(columns=["Datum_Uhrzeit_CET", "id"])
+                data = data.drop(columns=["controlArea", "Datum_Uhrzeit_CET", "id"])
                 model.fit(data)
             else:
                 features = model.feature_names_in_
@@ -116,6 +164,10 @@ def main(data_dir: Union[str, PathLike] = "data"):
                 predictions["id"] = data["id"]
                 predictions["anomaly"] = model.predict(data[features])
                 predictions["anomaly"] = predictions["anomaly"].map({1: 0, -1: 1})
+
+        anomalies_detected = predictions["anomaly"].sum()
+        anomalies_percentage = 100 * anomalies_detected / len(predictions)
+        print(f"Control Area {control_area}: {anomalies_detected} ({anomalies_percentage:.2f}%) anomalies detected.")
 
         submission_items.append(predictions)
 

@@ -103,7 +103,7 @@ class FeatureFactory:
             std_2d = data["Demand_RollingStd"].values.reshape(-1, 1)
             imputer = SimpleImputer(strategy="mean")
             data["Demand_RollingStd"] = imputer.fit_transform(std_2d).ravel()
-    
+
     def add_rolling_features_by_control_area(self, window_size: int = 5):
         """
         Add rolling mean and standard deviation features to 'Demand' column,
@@ -118,21 +118,23 @@ class FeatureFactory:
             data["Demand_RollingStd"] = pd.NA
 
             # Gruppiere nach 'controlArea'
-            for name, group in data.groupby('controlArea'):
+            for name, group in data.groupby("controlArea"):
                 # Berechne rollierenden Mittelwert und Standardabweichung
-                group['Demand_RollingMean'] = group['Demand'].rolling(window=window_size).mean()
-                group['Demand_RollingStd'] = group['Demand'].rolling(window=window_size).std()
+                group["Demand_RollingMean"] = group["Demand"].rolling(window=window_size).mean()
+                group["Demand_RollingStd"] = group["Demand"].rolling(window=window_size).std()
 
                 # Führe Imputation innerhalb jeder Gruppe durch
                 imputer = SimpleImputer(strategy="mean")
-                group['Demand_RollingMean'] = imputer.fit_transform(group['Demand_RollingMean'].values.reshape(-1, 1)).ravel()
-                group['Demand_RollingStd'] = imputer.fit_transform(group['Demand_RollingStd'].values.reshape(-1, 1)).ravel()
+                group["Demand_RollingMean"] = imputer.fit_transform(
+                    group["Demand_RollingMean"].values.reshape(-1, 1)
+                ).ravel()
+                group["Demand_RollingStd"] = imputer.fit_transform(
+                    group["Demand_RollingStd"].values.reshape(-1, 1)
+                ).ravel()
 
                 # Aktualisiere den Haupt-DataFrame
-                data.loc[group.index, 'Demand_RollingMean'] = group['Demand_RollingMean']
-                data.loc[group.index, 'Demand_RollingStd'] = group['Demand_RollingStd']
-
-
+                data.loc[group.index, "Demand_RollingMean"] = group["Demand_RollingMean"]
+                data.loc[group.index, "Demand_RollingStd"] = group["Demand_RollingStd"]
 
     def add_ratio_and_diff_features(self):
         """
@@ -171,6 +173,14 @@ class FeatureFactory:
         """
         for data in [self.train_data, self.test_data]:
             data["FRCE_LFCInput_Diff"] = data["FRCE"] - data["LFCInput"]
+
+    def add_daylight(self):
+        """
+        Add daylight feature, which determines if it is day or night.
+        """
+        for data in [self.train_data, self.test_data]:
+            hour = data["Datum_Uhrzeit_CET"].dt.hour
+            data["daylight"] = ((hour >= 6) & (hour <= 18)).astype(int)
 
     def add_corrected_demand_feature(self):
         """

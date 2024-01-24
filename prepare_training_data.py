@@ -11,7 +11,8 @@ def main(data_dir: Union[str, PathLike] = "data"):
     if not os.path.isdir(os.path.join("data", "label_studio")):
         os.makedirs(os.path.join("data", "label_studio"), exist_ok=True)
 
-    train_df = pd.read_csv(os.path.join(data_dir, "train.csv"), low_memory=False)
+    train_df = pd.read_csv(os.path.join(data_dir, "test.csv"), low_memory=False)
+    # test_df = pd.read_csv(os.path.join(data_dir, "test.csv"), low_memory=False)
 
     segment_id = 0
 
@@ -28,7 +29,7 @@ def main(data_dir: Union[str, PathLike] = "data"):
             segment = segment.drop(columns={"id"})
             segment["segment_id"] = segment_id
 
-            segment.to_csv(os.path.join("data", "label_studio", f"train_{segment_id:04d}.csv"), index=False)
+            segment.to_csv(os.path.join("data", "label_studio", f"test_{segment_id:04d}.csv"), index=False)
             segment_id += 1
 
 
