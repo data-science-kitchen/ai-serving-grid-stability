@@ -133,7 +133,6 @@ with mlflow.start_run():
     X_train = factory.train_data[features]
     X_test = factory.test_data[features]
 
-    X_train.isna().sum()
 
     # Scaler
     scaler = StandardScaler()
