@@ -3,6 +3,8 @@ import numpy as np
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.impute import SimpleImputer
 import sksfa
+from typing import List, Tuple
+
 
 
 # Ideas so far:
@@ -306,3 +308,42 @@ class FeatureFactory:
                 self.test_data[f"sfa{component_index}_{control_area}"] = numeric_test[:, component_index]
 
         return processing_pipeline
+
+    def add_lag_features(self, features_with_lags: List[Tuple[str, int]]) -> List[str]:
+        """
+        Adds lagged features to the dataset segmented by 'controlArea' and returns a list 
+        of the new feature names. The modified datasets are stored back in self.train_data 
+        and self.test_data.
+
+        Parameters:
+        features_with_lags (List[Tuple[str, int]]): A list of tuples, where each tuple 
+                                                    contains a feature name and the number 
+                                                    of lags to be created for that feature.
+
+        Returns:
+        List[str]: A list of the newly created lag feature names.
+        """
+        new_feature_names = []
+
+        for df_name in ['train_data', 'test_data']:
+            df = getattr(self, df_name)
+            # Segment the data by 'controlArea'
+            segmented_dfs = [group for _, group in df.groupby('controlArea')]
+            processed_segments = []
+            for segment_df in segmented_dfs:
+                for feature, n_lags in features_with_lags:
+                    for lag in range(1, n_lags + 1):
+                        lag_feature_name = f"{feature}_lag_{lag}"
+                        if lag_feature_name not in new_feature_names:
+                            new_feature_names.append(lag_feature_name)
+
+                        segment_df[lag_feature_name] = segment_df[feature].shift(lag)
+                        # Fill missing values at the start and end of the series
+                        segment_df[lag_feature_name].fillna(method='bfill', inplace=True)
+                        segment_df[lag_feature_name].fillna(method='ffill', inplace=True)
+                processed_segments.append(segment_df)
+
+            # Reassemble the segmented dataframes
+            setattr(self, df_name, pd.concat(processed_segments))
+
+        return new_feature_names
