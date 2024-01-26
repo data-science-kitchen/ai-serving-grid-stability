@@ -133,7 +133,6 @@ with mlflow.start_run():
     X_train = factory.train_data[features]
     X_test = factory.test_data[features]
 
-
     # Scaler
     scaler = StandardScaler()
     X_train_normalized = scaler.fit_transform(X_train)
@@ -145,7 +144,6 @@ with mlflow.start_run():
     for key, value in model.get_params().items():
         mlflow.log_param(key, value)
     model.fit(X_train_normalized)
-    mlflow.sklearn.log_model(model, "IF")
 
     # Anomalien auf Testdaten vorhersagen und anzeigen
     test_df["anomaly"] = model.predict(X_test_normalized)
@@ -165,4 +163,5 @@ with mlflow.start_run():
     mlflow.log_param('remove_threshold', 4)
 
     submission_df = submission_df[["id", "anomaly"]]
+    submission_df.loc[~test_df[["participationIN", "participationCMO"]].all(axis=1), "anomaly"] = 0
     submission_df.to_csv("submission.csv", index=False)
