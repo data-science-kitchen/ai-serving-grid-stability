@@ -90,6 +90,7 @@ with mlflow.start_run():
     factory.add_participation_state()
     factory.add_demand_FRCE_interaction()
 
+
     # Features
     # New features beginn with 'day', ...
     features = [
@@ -130,8 +131,18 @@ with mlflow.start_run():
             f"sfa{c}_{sfa_control_area}" for c in range(n_sfa_components)]
     features = features + sfa_features
 
+    # Lags
+    specific_lags = {'Demand': [3, 6, 9]} # Pick specific lags
+    features_with_lags = [('Demand', 9)] # Generate lags
+    features += factory.add_lag_features(features_with_lags, specific_lags)
+
     X_train = factory.train_data[features]
     X_test = factory.test_data[features]
+
+    print(X_train.columns)
+    print(X_train)
+    print(X_test.columns)
+    print(X_test)
 
     # Scaler
     scaler = StandardScaler()

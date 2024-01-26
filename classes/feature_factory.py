@@ -3,7 +3,7 @@ import numpy as np
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.impute import SimpleImputer
 import sksfa
-from typing import List, Tuple
+from typing import List, Tuple, Optional, Dict
 
 
 
@@ -94,6 +94,9 @@ class FeatureFactory:
 
         Args:
             window_size (int): The window size for calculating rolling statistics.
+
+        Comments:
+            ATTENTION: This should be wrong cause of the contralArea is ignored. But this is working!
         """
         for data in [self.train_data, self.test_data]:
             if data is None:
@@ -309,16 +312,20 @@ class FeatureFactory:
 
         return processing_pipeline
 
-    def add_lag_features(self, features_with_lags: List[Tuple[str, int]]) -> List[str]:
+    def add_lag_features(self, features_with_lags: List[Tuple[str, int]], specific_lags: Optional[Dict[str, List[int]]] = None) -> List[str]:
         """
-        Adds lagged features to the dataset segmented by 'controlArea' and returns a list 
-        of the new feature names. The modified datasets are stored back in self.train_data 
-        and self.test_data.
+        Adds lagged features to the dataset segmented by 'controlArea', sorts the 
+        reassembled dataset by 'id', and returns a list of the new feature names. 
+        The modified datasets are stored back in self.train_data and self.test_data.
+        Specific lags can be defined for each feature.
 
         Parameters:
         features_with_lags (List[Tuple[str, int]]): A list of tuples, where each tuple 
-                                                    contains a feature name and the number 
-                                                    of lags to be created for that feature.
+                                                    contains a feature name and the maximum 
+                                                    number of lags to be created for that feature.
+        specific_lags (Optional[Dict[str, List[int]]]): A dictionary where keys are feature 
+                                                        names and values are lists of specific 
+                                                        lag numbers to be included.
 
         Returns:
         List[str]: A list of the newly created lag feature names.
@@ -332,7 +339,8 @@ class FeatureFactory:
             processed_segments = []
             for segment_df in segmented_dfs:
                 for feature, n_lags in features_with_lags:
-                    for lag in range(1, n_lags + 1):
+                    lags_to_include = specific_lags.get(feature, range(1, n_lags + 1)) if specific_lags else range(1, n_lags + 1)
+                    for lag in lags_to_include:
                         lag_feature_name = f"{feature}_lag_{lag}"
                         if lag_feature_name not in new_feature_names:
                             new_feature_names.append(lag_feature_name)
@@ -343,7 +351,9 @@ class FeatureFactory:
                         segment_df[lag_feature_name].fillna(method='ffill', inplace=True)
                 processed_segments.append(segment_df)
 
-            # Reassemble the segmented dataframes
-            setattr(self, df_name, pd.concat(processed_segments))
+            # Reassemble the segmented dataframes and sort by 'id'
+            combined_df = pd.concat(processed_segments)
+            combined_df.sort_values(by='id', inplace=True)
+            setattr(self, df_name, combined_df)
 
         return new_feature_names
