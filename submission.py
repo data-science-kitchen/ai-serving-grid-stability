@@ -82,7 +82,7 @@ with mlflow.start_run():
         )
 
     factory.add_time_features()
-    factory.add_rolling_features(window_size=3)
+    # factory.add_rolling_features(window_size=3)
     # factory.add_rolling_features_by_control_area(window_size=3)
     factory.add_ratio_and_diff_features()
     factory.add_aFRR_activation_request_ratio()
@@ -130,8 +130,16 @@ with mlflow.start_run():
             f"sfa{c}_{sfa_control_area}" for c in range(n_sfa_components)]
     features = features + sfa_features
 
+    # Example usage:
+    arima_orders = {'Demand': (3, 0, 2), 'correctedDemand': (3, 0, 2)}
+    features += factory.add_arima_resid_features(['Demand', 'correctedDemand'], arima_orders)
+
+    print(features)
+
     X_train = factory.train_data[features]
     X_test = factory.test_data[features]
+    print(X_train)
+    print(X_test)
 
     # Scaler
     scaler = StandardScaler()

@@ -3,7 +3,9 @@ import numpy as np
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.impute import SimpleImputer
 import sksfa
-from typing import List, Tuple
+from typing import List, Tuple, Dict
+from statsmodels.tsa.arima.model import ARIMA
+
 
 
 
@@ -345,5 +347,39 @@ class FeatureFactory:
 
             # Reassemble the segmented dataframes
             setattr(self, df_name, pd.concat(processed_segments))
+
+        return new_feature_names
+    
+    def add_arima_resid_features(self, features: List[str], arima_orders: Dict[str, Tuple[int, int, int]]) -> List[str]:
+        """
+        Applies ARIMA models to specified features within each controlArea and adds the residuals as new features.
+
+        Parameters:
+        features (List[str]): List of feature names to apply ARIMA models to.
+        arima_orders (Dict[str, Tuple[int, int, int]]): Dictionary mapping feature names 
+                                                        to their ARIMA order (p, d, q).
+
+        Returns:
+        List[str]: A list of the newly created residual feature names.
+        """
+        new_feature_names = []
+
+        for df_name in ['train_data', 'test_data']:
+            df = getattr(self, df_name)
+            for feature in features:
+                resid_feature_name = f"{feature}_resid"
+                df[resid_feature_name] = None
+                new_feature_names.append(resid_feature_name)
+
+                for control_area, segment_df in df.groupby('controlArea'):
+                    order = arima_orders.get(feature, (1, 0, 1))  # Default ARIMA order
+                    model = ARIMA(segment_df[feature], order=order)
+                    model_fit = model.fit()
+                    
+                    df.loc[segment_df.index, resid_feature_name] = model_fit.resid
+
+            # Ensure the DataFrame is sorted by 'id'
+            df = df.sort_values(by='id')
+            setattr(self, df_name, df)
 
         return new_feature_names
