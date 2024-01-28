@@ -2,12 +2,70 @@ import pandas as pd
 import mlflow
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.metrics import r2_score
 
 from classes.feature_factory import FeatureFactory
 
 mlflow.set_tracking_uri("https://mlflow.preislers.de")
 mlflow.set_experiment("ai-serving-grid-stability")
 
+def train_intrafeature(train_data, val_data, group, regression_class, hyperparameters={}, metrics=[r2_score]):
+    """
+    Takes a group of features and trains regression for each feature, based on all remaining features. 
+    Returns classifiers as dict.
+    """
+    for feature_name in group:
+        assert feature_name in train_data.columns
+
+    model_dict = {}
+    for target_name in group:
+        remaining_feature_names = [feature_name for feature_name in group if not feature_name == target_name]
+        print(f"Training model: '{target_name}' from {remaining_feature_names} ")
+        model = regression_class(**hyperparameters)
+        train_subset = train_data[remaining_feature_names]
+        val_subset = val_data[remaining_feature_names]
+        train_target = train_data[target_name]
+        val_target = val_data[target_name]
+        model.fit(train_subset, train_target)
+        train_pred = model.predict(train_subset)
+        val_pred = model.predict(val_subset)
+        for metric in metrics:
+            train_score = metric(train_target, train_pred)
+            val_score = metric(val_target, val_pred)
+            print(f"\t{metric}")
+            print(f"\t\ttrain:\t{train_score}")
+            print(f"\t\tval:\t{val_score}")
+        print("\t...done.")
+        model_dict[target_name] = (model, remaining_feature_names)
+    return model_dict
+
+def run_intrafeature_model(data, model, target_name, remaining_feature_names):
+    subset = data[remaining_feature_names]
+    target = data[target_name]
+    pred = model.predict(subset)
+    return target, pred
+
+def hypothesize_anomalies(target, prediction, quantile=0.15):
+    residuals = target - prediction
+    lower, upper = residuals.quantile(quantile), residuals.quantile(1 - quantile)
+    anomalies = residuals.apply(lambda x: 0 if lower < x < upper else 1)
+    return anomalies
+
+def count_anomagrams(anomalies):
+    """
+    Determine counts of lengths of anomalous blocks
+    """
+    counts = []
+    counter = 0
+    for anomaly in anomalies:
+        if anomaly == 1:
+            counter += 1
+        if anomaly == 0 and counter > 0:
+            counts.append(counter)
+            counter = 0
+    return np.array(counts)
 
 
 def fill_anomalies(df, window_size=4, threshold=2, loops=2):
@@ -133,10 +191,30 @@ with mlflow.start_run():
     X_train = factory.train_data[features]
     X_test = factory.test_data[features]
 
+    # Merlins intra-feature dingens
+    hyperparameters = {"max_depth": 10}
+    regression_class = DecisionTreeRegressor
+    group = ["correction", "correctionEcho", "FRCE", "aFRRactivation"]#"correction", "correctedDemand", "Demand"]
+    model_dict = train_intrafeature(train_df, 
+                                    test_df,
+                                    group=group, 
+                                    regression_class=regression_class, 
+                                    hyperparameters=hyperparameters,
+                                    metrics=[r2_score])
+    target_name = "aFRRactivation"
+    model, remaining = model_dict[target_name]
+    target, pred = run_intrafeature_model(train_df, model, target_name, remaining)
+    X_train['residual'] = target-pred
+    target, pred = run_intrafeature_model(test_df, model, target_name, remaining)
+    X_test['residual'] = target-pred
+
     # Scaler
     scaler = StandardScaler()
     X_train_normalized = scaler.fit_transform(X_train)
     X_test_normalized = scaler.transform(X_test)
+
+
+    
 
     # Isolation Forest Modell initialisieren und trainieren
     model = IsolationForest(
@@ -147,10 +225,12 @@ with mlflow.start_run():
 
     # Anomalien auf Testdaten vorhersagen und anzeigen
     test_df["anomaly"] = model.predict(X_test_normalized)
-
     # Konvertiere Anomalie-Vorhersagen: -1 (Anomalie) wird zu 1 und 1 (normal) wird zu 0
     test_df["anomaly"] = test_df["anomaly"].apply(
         lambda x: 1 if x == -1 else 0)
+
+    
+
 
     df_filled = fill_anomalies(
         test_df.copy(), window_size=10, threshold=4, loops=2)
