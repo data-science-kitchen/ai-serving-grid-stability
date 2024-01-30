@@ -66,21 +66,6 @@ with mlflow.start_run():
 
     factory.add_corrected_demand_feature()
 
-    selected_sfa_features = ["Demand", "correction", "correctionEcho",
-                             "FRCE", "LFCInput", "aFRRactivation", "aFRRrequest"]
-    mlflow.log_param("selected_sfa_features", ",".join(
-        map(str, selected_sfa_features)))
-
-    for sfa_control_area in sfa_control_areas:
-        factory.add_SFA(
-            n_sfa_components,
-            selected_sfa_features,
-            poly_degree=sfa_degree,
-            control_area=sfa_control_area,
-            batch_size=100,
-            cascade_length=1,
-        )
-
     factory.add_time_features()
     factory.add_rolling_features(window_size=3)
     # factory.add_rolling_features_by_control_area(window_size=3)
@@ -124,6 +109,25 @@ with mlflow.start_run():
     ]  # , 'corrected_demand_diff']
 
     mlflow.log_param("features", ",".join(map(str, features)))
+
+
+    selected_sfa_features = ["Demand", "correction", "correctionEcho",
+                             "FRCE", "LFCInput", "aFRRactivation", "aFRRrequest"]    
+    selected_sfa_features = selected_sfa_features + ["Demand_CorrectedDemand_Ratio", "aFRR_Activation_Request_Ratio", "Demand_FRCE_Interaction"]
+    mlflow.log_param("selected_sfa_features", ",".join(
+        map(str, selected_sfa_features)))
+
+    for sfa_control_area in sfa_control_areas:
+        factory.add_SFA(
+            n_sfa_components,
+            selected_sfa_features,
+            poly_degree=sfa_degree,
+            control_area=sfa_control_area,
+            batch_size=100,
+            cascade_length=1,
+        )
+
+
 
     for sfa_control_area in sfa_control_areas:
         sfa_features = [
