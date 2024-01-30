@@ -86,6 +86,7 @@ class GridStabilityDataset(Dataset):
 
     def __getitem__(self, idx: int):
         segment = self.dataset[idx]
+        segment = segment[self.feature_names]  # Make sure columns are in the correct order.
         segment = self.scaler.transform(segment).astype(np.float32)
 
         if self.target_feature is None:

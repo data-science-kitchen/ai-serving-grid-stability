@@ -1,12 +1,12 @@
 import fire
 import os
-import pickle
 
 from os import PathLike
 
 import numpy as np
 import torch.optim
 from skorch import NeuralNet
+from skorch.helper import predefined_split
 from skorch.callbacks import Checkpoint, EarlyStopping
 from src.dataset import GridStabilityDataset
 from src.model import GRUPredictor
@@ -31,8 +31,8 @@ def main(
     model_dir: Union[str, PathLike] = os.path.join("data", "models"),
     hidden_dim: int = 16,
     dropout: float = 0.,
-    max_epochs: int = 50,
-    batch_size: int = 256,
+    max_epochs: int = 100,
+    batch_size: int = 512,
     learning_rate: float = 0.01
 ) -> None:
     np.random.seed(42)
@@ -52,7 +52,7 @@ def main(
                 monitor="valid_loss_best",
                 dirname=os.path.join(model_dir, target_feature),
                 f_pickle="model.pkl",
-                load_best=True
+                load_best=True,
             )
             early_stopping = EarlyStopping(load_best=True)
 
@@ -66,12 +66,10 @@ def main(
                 lr=learning_rate,
                 optimizer=torch.optim.AdamW,
                 iterator_train__shuffle=True,
+                train_split=predefined_split(dataset_test),
                 callbacks=[checkpoint, early_stopping],
             )
             model.fit(dataset_train)
-
-            # with open(os.path.join(model_dir, target_feature + ".pkl"), "wb") as file:
-            #     pickle.dump(model, file)
 
 
 if __name__ == "__main__":
