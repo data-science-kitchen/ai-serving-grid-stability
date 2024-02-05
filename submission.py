@@ -1,131 +1,110 @@
 import pandas as pd
-import mlflow
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 
 from classes.feature_factory import FeatureFactory
 from classes.post_process import PostProcess
 
-mlflow.set_tracking_uri("https://mlflow.preislers.de")
-mlflow.set_experiment("ai-serving-grid-stability")
 
+# Trainingsdaten & Testdaten laden
+train_df = pd.read_csv("data/train.csv")
+test_df = pd.read_csv("data/test.csv")
 
-with mlflow.start_run():
+# Beispiel für die Verwendung FeatureFactory
+factory = FeatureFactory(train_df, test_df)
 
-    # Trainingsdaten & Testdaten laden
-    train_df = pd.read_csv("data/train.csv")
-    test_df = pd.read_csv("data/test.csv")
+n_sfa_components = 4
+sfa_control_areas = [1, 2]
+sfa_degree = 2
 
-    # Beispiel für die Verwendung FeatureFactory
-    factory = FeatureFactory(train_df, test_df)
+factory.add_corrected_demand_feature()
 
-    n_sfa_components = 4
-    sfa_control_areas = [1, 2]
-    sfa_degree = 2
-    mlflow.log_param("n_sfa_components", n_sfa_components)
-    mlflow.log_param("sfa_control_areas", ",".join(
-        map(str, sfa_control_areas)))
-    mlflow.log_param("sfa_degree", sfa_degree)
+selected_sfa_features = ["Demand", "correction", "correctionEcho",
+                         "FRCE", "LFCInput", "aFRRactivation", "aFRRrequest"]
 
-    factory.add_corrected_demand_feature()
+for sfa_control_area in sfa_control_areas:
+    factory.add_SFA(
+        n_sfa_components,
+        selected_sfa_features,
+        poly_degree=sfa_degree,
+        control_area=sfa_control_area,
+        batch_size=100,
+        cascade_length=1,
+    )
 
-    selected_sfa_features = ["Demand", "correction", "correctionEcho",
-                             "FRCE", "LFCInput", "aFRRactivation", "aFRRrequest"]
-    mlflow.log_param("selected_sfa_features", ",".join(
-        map(str, selected_sfa_features)))
+factory.add_time_features()
+factory.add_rolling_features(window_size=3)
+# factory.add_rolling_features_by_control_area(window_size=3)
+factory.add_ratio_and_diff_features()
+factory.add_aFRR_activation_request_ratio()
+factory.add_FRCE_LFCInput_difference()
+factory.add_participation_state()
+factory.add_demand_FRCE_interaction()
 
-    for sfa_control_area in sfa_control_areas:
-        factory.add_SFA(
-            n_sfa_components,
-            selected_sfa_features,
-            poly_degree=sfa_degree,
-            control_area=sfa_control_area,
-            batch_size=100,
-            cascade_length=1,
-        )
+# Features
+# New features beginn with 'day', ...
+features = [
+    "Demand",
+    "correction",
+    "correctedDemand",
+    "FRCE",
+    "controlBandPos",
+    "controlBandNeg",
+    "LFCInput",
+    "aFRRactivation",
+    "aFRRrequest",
+    "participationCMO",
+    "participationIN",
+    "correctionEcho",
+    "BandLimitedCorrectedDemand",
+    "controlArea",
+    "hour",
+    "day",
+    "weekday",
+    "month",
+    # "daylight",
+    # "workday",
+    # "Demand_RollingMean",
+    # "Demand_RollingStd",
+    "Demand_CorrectedDemand_Ratio",
+    "Demand_CorrectedDemand_Diff",
+    "aFRR_Activation_Request_Ratio",
+    "FRCE_LFCInput_Diff",
+    "Participation_State",
+    "Demand_FRCE_Interaction",
+]  # , 'corrected_demand_diff']
 
-    factory.add_time_features()
-    factory.add_rolling_features(window_size=3)
-    # factory.add_rolling_features_by_control_area(window_size=3)
-    factory.add_ratio_and_diff_features()
-    factory.add_aFRR_activation_request_ratio()
-    factory.add_FRCE_LFCInput_difference()
-    factory.add_participation_state()
-    factory.add_demand_FRCE_interaction()
+for sfa_control_area in sfa_control_areas:
+    sfa_features = [
+        f"sfa{c}_{sfa_control_area}" for c in range(n_sfa_components)]
+features = features + sfa_features
 
-    # Features
-    # New features beginn with 'day', ...
-    features = [
-        "Demand",
-        "correction",
-        "correctedDemand",
-        "FRCE",
-        "controlBandPos",
-        "controlBandNeg",
-        "LFCInput",
-        "aFRRactivation",
-        "aFRRrequest",
-        "participationCMO",
-        "participationIN",
-        "correctionEcho",
-        "BandLimitedCorrectedDemand",
-        "controlArea",
-        "hour",
-        "day",
-        "weekday",
-        "month",
-        # "daylight",
-        # "workday",
-        # "Demand_RollingMean",
-        # "Demand_RollingStd",
-        "Demand_CorrectedDemand_Ratio",
-        "Demand_CorrectedDemand_Diff",
-        "aFRR_Activation_Request_Ratio",
-        "FRCE_LFCInput_Diff",
-        "Participation_State",
-        "Demand_FRCE_Interaction",
-    ]  # , 'corrected_demand_diff']
+X_train = factory.train_data[features]
+X_test = factory.test_data[features]
 
-    mlflow.log_param("features", ",".join(map(str, features)))
+# Scaler
+scaler = StandardScaler()
+X_train_normalized = scaler.fit_transform(X_train)
+X_test_normalized = scaler.transform(X_test)
 
-    for sfa_control_area in sfa_control_areas:
-        sfa_features = [
-            f"sfa{c}_{sfa_control_area}" for c in range(n_sfa_components)]
-    features = features + sfa_features
+# Isolation Forest Modell initialisieren und trainieren
+model = IsolationForest(
+    n_estimators=32, contamination="auto", random_state=42)
+model.fit(X_train_normalized)
 
-    X_train = factory.train_data[features]
-    X_test = factory.test_data[features]
+# Anomalien auf Testdaten vorhersagen und anzeigen
+test_df["anomaly"] = model.predict(X_test_normalized)
 
-    # Scaler
-    scaler = StandardScaler()
-    X_train_normalized = scaler.fit_transform(X_train)
-    X_test_normalized = scaler.transform(X_test)
+# Konvertiere Anomalie-Vorhersagen: -1 (Anomalie) wird zu 1 und 1 (normal) wird zu 0
+test_df["anomaly"] = test_df["anomaly"].apply(
+    lambda x: 1 if x == -1 else 0)
 
-    # Isolation Forest Modell initialisieren und trainieren
-    model = IsolationForest(
-        n_estimators=32, contamination="auto", random_state=42)
-    for key, value in model.get_params().items():
-        mlflow.log_param(key, value)
-    model.fit(X_train_normalized)
+df_filled = PostProcess.fill_anomalies(
+    test_df.copy(), window_size=10, threshold=4, loops=2)
+submission_df = PostProcess.remove_anomalies(
+    df_filled.copy(), window_size=5, threshold=4)
 
-    # Anomalien auf Testdaten vorhersagen und anzeigen
-    test_df["anomaly"] = model.predict(X_test_normalized)
-
-    # Konvertiere Anomalie-Vorhersagen: -1 (Anomalie) wird zu 1 und 1 (normal) wird zu 0
-    test_df["anomaly"] = test_df["anomaly"].apply(
-        lambda x: 1 if x == -1 else 0)
-
-    df_filled = PostProcess.fill_anomalies(
-        test_df.copy(), window_size=10, threshold=4, loops=2)
-    mlflow.log_param('fill_window_size', 10)
-    mlflow.log_param('fill_threshold', 4)
-    mlflow.log_param('fill_loops', 2)
-    submission_df = PostProcess.remove_anomalies(
-        df_filled.copy(), window_size=5, threshold=4)
-    mlflow.log_param('remove_window_size', 5)
-    mlflow.log_param('remove_threshold', 4)
-
-    submission_df = submission_df[["id", "anomaly"]]
-    submission_df.loc[~test_df[["participationIN", "participationCMO"]].all(
-        axis=1), "anomaly"] = 0
-    submission_df.to_csv("submission.csv", index=False)
+submission_df = submission_df[["id", "anomaly"]]
+submission_df.loc[~test_df[["participationIN", "participationCMO"]].all(
+    axis=1), "anomaly"] = 0
+submission_df.to_csv("submission.csv", index=False)
