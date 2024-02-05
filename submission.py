@@ -4,47 +4,10 @@ from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 
 from classes.feature_factory import FeatureFactory
+from classes.post_process import PostProcess
 
 mlflow.set_tracking_uri("https://mlflow.preislers.de")
 mlflow.set_experiment("ai-serving-grid-stability")
-
-
-
-def fill_anomalies(df, window_size=4, threshold=2, loops=2):
-    count = 0
-    for l in range(loops):
-        for index, row in df.iterrows():
-            if row["anomaly"] == 0:
-                start_index = max(index - window_size, 0)
-                end_index = min(index + window_size + 1, len(df))
-                window = df["anomaly"][start_index:end_index]
-
-                # Prüfe, ob mindestens eine '1' im Bereich vor und nach der '0' ist
-                if 1 in df["anomaly"][start_index:index].values and 1 in df["anomaly"][index + 1: end_index].values:
-                    window = df["anomaly"][start_index:end_index]
-                    if window.sum() >= threshold:
-                        df.at[index, "anomaly"] = 1
-                        count += 1
-    print("Gefüllt:", count)
-
-    return df
-
-
-def remove_anomalies(df, window_size=5, threshold=1):
-    count = 0
-    for index, row in df.iterrows():
-        if row["anomaly"] == 1:
-            start_index = max(index - window_size, 0)
-            end_index = min(index + window_size + 1, len(df))
-
-            if 0 in df["anomaly"][start_index:index].values and 0 in df["anomaly"][index + 1: end_index].values:
-                window = df["anomaly"][start_index:end_index]
-                if window.sum() <= threshold:
-                    df.at[index, "anomaly"] = 0
-                    count += 1
-    print("Entfernt:", count)
-
-    return df
 
 
 with mlflow.start_run():
@@ -152,16 +115,17 @@ with mlflow.start_run():
     test_df["anomaly"] = test_df["anomaly"].apply(
         lambda x: 1 if x == -1 else 0)
 
-    df_filled = fill_anomalies(
+    df_filled = PostProcess.fill_anomalies(
         test_df.copy(), window_size=10, threshold=4, loops=2)
     mlflow.log_param('fill_window_size', 10)
     mlflow.log_param('fill_threshold', 4)
     mlflow.log_param('fill_loops', 2)
-    submission_df = remove_anomalies(
+    submission_df = PostProcess.remove_anomalies(
         df_filled.copy(), window_size=5, threshold=4)
     mlflow.log_param('remove_window_size', 5)
     mlflow.log_param('remove_threshold', 4)
 
     submission_df = submission_df[["id", "anomaly"]]
-    submission_df.loc[~test_df[["participationIN", "participationCMO"]].all(axis=1), "anomaly"] = 0
+    submission_df.loc[~test_df[["participationIN", "participationCMO"]].all(
+        axis=1), "anomaly"] = 0
     submission_df.to_csv("submission.csv", index=False)
