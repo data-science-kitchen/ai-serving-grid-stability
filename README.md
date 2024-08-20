@@ -20,8 +20,8 @@ The `submission.py` script contains the code needed to generate the `submission.
 2. cd ai-serving-grid-stability
 3. `py -m venv venv` (Python 3.9.1) or replace `py` with your installed Python version.
 4. Activate your venv
-5. `pip install requirements.txt`
-6. Download [train.csv](https://www.kaggle.com/competitions/ai-serving-grid-stability/data?select=train.csv) from Kaggle.
+5. `pip install -r requirements.txt`
+6. Download [train.csv](https://www.kaggle.com/competitions/ai-serving-grid-stability/data?select=train.csv) and [train.csv](https://www.kaggle.com/competitions/ai-serving-grid-stability/data?select=test.csv) ai-serving-grid-stability/data?select=test.csv and from Kaggle.
 7. Put the `train.csv` and `test.csv` into the data folder.
 8. py submission.py
 
@@ -31,7 +31,7 @@ Just test notebooks.
 
 1. `py -m venv venv` (Python 3.9.1) or replace `py` with your installed Python version.
 2. Activate your venv
-3. `pip install requirements.txt`
+3. `pip install -r requirements.txt`
 4. Add Kernel: `python -m ipykernel install --user --name ai-serving-grid-stab --display-name "Ai Serving Grid Stability"` (Restart VSCode)
 5. Select your kernel in your Notebook.
 
