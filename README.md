@@ -18,7 +18,7 @@ The `submission.py` script contains the code needed to generate the `submission.
 
 1. git clone https://github.com/data-science-kitchen/ai-serving-grid-stability.git
 2. cd ai-serving-grid-stability
-3. `py -m venv venv` (Python 3.9.1) or replace `py` with your installed Python version.
+3. `py -m venv venv` (Python 3.10.10) or replace `py` with your installed Python version.
 4. Activate your venv
 5. `pip install -r requirements.txt`
 6. Download [train.csv](https://www.kaggle.com/competitions/ai-serving-grid-stability/data?select=train.csv) and [train.csv](https://www.kaggle.com/competitions/ai-serving-grid-stability/data?select=test.csv) ai-serving-grid-stability/data?select=test.csv and from Kaggle.
